@@ -7,7 +7,9 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
-    chunkSizeWarningLimit: 700,
+    // Keep the public/ assets separate from Vite's own bundle output.
+    assetsDir: 'bundled',
+    chunkSizeWarningLimit: 900,
   },
   test: {
     include: ['tests/**/*.test.ts'],

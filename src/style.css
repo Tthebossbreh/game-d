@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  background: #0b1117;
+  background: #050a0e;
 }
 
 * {
@@ -14,11 +14,13 @@ body {
 }
 
 #shell {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100vw;
   height: 100vh;
+  background: radial-gradient(circle at 50% 40%, #0b1a24 0%, #050a0e 70%);
 }
 
 #game {
@@ -26,4 +28,17 @@ body {
   height: 100%;
   display: block;
   image-rendering: pixelated;
+}
+
+#loading {
+  position: absolute;
+  color: #8fe3b0;
+  font-family: monospace;
+  letter-spacing: 0.3em;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+#loading.hidden {
+  display: none;
 }
