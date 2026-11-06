@@ -29,33 +29,8 @@ export interface LevelData {
   columns: { main: number; front: number };
 }
 
-/** Where the diver starts: standing on the cave floor near the left wall. */
-export const PLAYER_SPAWN = { x: 296, y: 44 * TILE - PLAYER.height / 2 } as const;
-
-/**
- * Level 1 ships with mines and exits but no fish, so the platformer seeds the
- * open water with the three fish archetypes plus a scattering of pickups.
- */
-const EXTRA_SPAWNS: Spawn[] = [
-  { kind: 'fish', x: 600, y: 300 },
-  { kind: 'fish', x: 760, y: 240 },
-  { kind: 'fish', x: 520, y: 600 },
-  { kind: 'fish', x: 880, y: 560 },
-  { kind: 'fish', x: 660, y: 470 },
-  { kind: 'fish', x: 420, y: 300 },
-  { kind: 'fish-big', x: 360, y: 200 },
-  { kind: 'fish-big', x: 980, y: 520 },
-  { kind: 'fish-big', x: 252, y: 422 },
-  { kind: 'fish-dart', x: 700, y: 380 },
-  { kind: 'fish-dart', x: 460, y: 560 },
-  { kind: 'fish-dart', x: 1040, y: 440 },
-  { kind: 'pickup', x: 500, y: 200 },
-  { kind: 'pickup', x: 700, y: 300 },
-  { kind: 'pickup', x: 900, y: 300 },
-  { kind: 'pickup', x: 600, y: 620 },
-  { kind: 'pickup', x: 200, y: 500 },
-  { kind: 'pickup', x: 900, y: 620 },
-];
+/** Fallback used only if a level has no EntityPlayer in its entity list. */
+const DEFAULT_PLAYER_SPAWN = { x: 296, y: 44 * TILE - PLAYER.height / 2 } as const;
 
 const KIND_BY_ENTITY: Record<string, SpawnKind> = {
   EntityPlayer: 'player',
@@ -66,6 +41,7 @@ const KIND_BY_ENTITY: Record<string, SpawnKind> = {
   EntityMineSmall: 'mine-small',
   EntityMineBig: 'mine-big',
   EntityLevelexit: 'exit',
+  EntityPickup: 'pickup',
 };
 
 function entitySize(kind: SpawnKind): { w: number; h: number } {
@@ -115,19 +91,21 @@ export function parseLevel(raw: typeof import('./levels/level1.json')): LevelDat
   const height = raw.height;
   const collision = raw.collision as number[][];
 
-  const spawns: Spawn[] = [{ kind: 'player', x: PLAYER_SPAWN.x, y: PLAYER_SPAWN.y }];
+  const spawns: Spawn[] = [];
 
   for (const entity of raw.entities) {
     const kind = KIND_BY_ENTITY[entity.type];
-    if (!kind || kind === 'player') {
-      // The player spawn is authored separately; EntityVoid markers are ignored.
+    if (!kind) {
+      // EntityVoid markers and other authoring-only types are ignored.
       continue;
     }
     const { w, h } = entitySize(kind);
     spawns.push({ kind, x: entity.x + w / 2, y: entity.y + h / 2 });
   }
 
-  spawns.push(...EXTRA_SPAWNS);
+  if (!spawns.some((s) => s.kind === 'player')) {
+    spawns.push({ kind: 'player', x: DEFAULT_PLAYER_SPAWN.x, y: DEFAULT_PLAYER_SPAWN.y });
+  }
 
   return {
     tile: raw.tilesize,
@@ -147,3 +125,6 @@ export const LEVEL: LevelData = parseLevel(raw);
 export function findSpawn(level: LevelData, kind: SpawnKind): Spawn | undefined {
   return level.spawns.find((s) => s.kind === kind);
 }
+
+/** Where the diver starts, taken from the level's EntityPlayer marker. */
+export const PLAYER_SPAWN: { x: number; y: number } = findSpawn(LEVEL, 'player') ?? DEFAULT_PLAYER_SPAWN;

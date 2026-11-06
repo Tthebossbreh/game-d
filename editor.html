@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Underwater Diving — Level Editor</title>
+  </head>
+  <body>
+    <div id="app">
+      <aside id="sidebar">
+        <header>
+          <h1>Level Editor</h1>
+          <p class="sub">Underwater Diving</p>
+        </header>
+
+        <section class="group">
+          <h2>Layer</h2>
+          <div class="seg" id="layer-seg">
+            <button data-layer="main" class="active">Main</button>
+            <button data-layer="front">Front</button>
+            <button data-layer="collision">Collision</button>
+          </div>
+        </section>
+
+        <section class="group">
+          <h2>Tool</h2>
+          <div class="seg wrap" id="tool-seg">
+            <button data-tool="brush" class="active" title="Brush (B)">Brush</button>
+            <button data-tool="line" title="Line (L)">Line</button>
+            <button data-tool="box" title="Box (R)">Box</button>
+            <button data-tool="eraser" title="Eraser (E)">Eraser</button>
+            <button data-tool="entity" title="Entity (T)">Entity</button>
+          </div>
+        </section>
+
+        <section class="group" id="palette-group">
+          <h2>Palette <span id="tile-label" class="muted"></span></h2>
+          <div id="palette-wrap"><canvas id="palette"></canvas></div>
+          <div class="row" id="palette-zoom">
+            <button data-pz="1">1&times;</button>
+            <button data-pz="2" class="active">2&times;</button>
+            <button data-pz="3">3&times;</button>
+          </div>
+        </section>
+
+        <section class="group" id="entity-group">
+          <h2>Entities</h2>
+          <div id="entity-list"></div>
+        </section>
+
+        <section class="group">
+          <h2>Actions</h2>
+          <div class="actions">
+            <button id="save" class="primary">Save to project</button>
+            <button id="download">Download JSON</button>
+            <label class="file">Load JSON<input type="file" id="load" accept="application/json" /></label>
+            <button id="new">New level</button>
+          </div>
+        </section>
+
+        <div id="status" role="status"></div>
+      </aside>
+
+      <main id="viewport">
+        <canvas id="view"></canvas>
+        <div id="toolbar">
+          <button id="undo" title="Undo (Ctrl+Z)">&#8630;</button>
+          <button id="redo" title="Redo (Ctrl+Shift+Z)">&#8631;</button>
+          <button id="fit" title="Fit to view">Fit</button>
+          <button id="grid" class="active" title="Toggle grid (G)">Grid</button>
+        </div>
+        <div id="hint">Wheel = zoom &middot; Middle / Space + drag = pan &middot; Right-click = delete entity</div>
+      </main>
+    </div>
+    <script type="module" src="/src/editor/main.ts"></script>
+  </body>
+</html>

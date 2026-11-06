@@ -27,6 +27,37 @@ pnpm build      # static production build in dist/
 pnpm preview    # serve the built output
 ```
 
+## Level editor
+
+A browser-based tile editor ships with the game. With `pnpm dev` running, open:
+
+```
+http://localhost:5173/editor.html
+```
+
+| Tool | Key | What it does |
+| --- | --- | --- |
+| Brush | `B` | Paint single tiles as you drag |
+| Line | `L` | Click-drag to draw a Bresenham line of tiles |
+| Box | `R` | Click-drag to fill a rectangle |
+| Eraser | `E` | Clear tiles (also works as a brush) |
+| Entity | `T` | Click to place the selected fish, mine, pickup or the player |
+
+Other editor features:
+
+- **Layers** — paint the `main` tiles, the `front` props, or the `collision` grid.
+- **Palette** — pick a tile from `tiles.png` / `props.png`; zoom 1×–3×.
+- **Entities** — choose from the pack's fish, mines, pickups and the level exit.
+- **Undo / Redo** — `Ctrl+Z` / `Ctrl+Shift+Z`, or the toolbar arrows.
+- **Pan / zoom** — wheel to zoom, middle-drag or `Space`+drag to pan.
+- **Save to project** — writes straight back to
+  `src/game/levels/level1.json` while the dev server is running. In a
+  production build this falls back to downloading the JSON.
+- **Right-click** on the canvas deletes the entity under the cursor.
+
+Because the game reads spawns from the level JSON, anything you place in the
+editor (including the player start) takes effect on the next page load.
+
 ## Controls
 
 | Action | Keys |
@@ -68,8 +99,13 @@ level data into `src/game/levels/level1.json` and rasterised at load time.
 
 ```
 public/assets/            runtime sprites, tiles, sounds and UI art
+editor.html               standalone level-editor page
 src/
   main.ts                 engine bootstrap + scene registration
+  editor/
+    main.ts               editor UI: canvas, tools, palette, entities
+    tools.ts              pure tile/entity operations (unit-tested)
+    editor.css            editor styling
   game/
     config.ts             all gameplay tunables (engine-free)
     assets.ts             asset paths, loader, sprite-sheet helpers
@@ -88,15 +124,18 @@ tests/                    headless Vitest suite
 
 ### Design notes
 
-- **Engine-free simulation.** `PlayerState`, `EnemyState`, `physics/` and
-  `level.ts` import nothing from Excalibur, so movement, combat and level
-  parsing are covered by fast headless tests. The `*Actor` classes only render.
+- **Engine-free simulation.** `PlayerState`, `EnemyState`, `physics/`,
+  `level.ts` and `editor/tools.ts` import nothing from Excalibur, so movement,
+  combat, level parsing and editor edits are covered by fast headless tests.
+  The `*Actor` classes only render.
 - **Fixed 120 Hz step** for deterministic movement.
 - **Real level data.** Rather than re-authoring the cave, the pack's own
   collision grid drives physics and its tile layers are pre-rendered once into
   two sprites (`main` behind the actors, `props` in front).
-- **Debug handle.** `window.__diving` exposes the `Engine` for console poking
-  (scene changes, camera, actors).
+- **Level JSON is authoritative.** Player, enemy, pickup and exit positions all
+  come from `level1.json`; the editor writes that same file in dev.
+- **Debug handles.** `window.__diving` exposes the `Engine` and
+  `window.__editor` exposes the editor state for console poking.
 
 ## Next
 
