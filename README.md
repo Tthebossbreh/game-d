@@ -1,5 +1,7 @@
 # Underwater Diving — Cave Platformer
 
+**▶ Play it now: https://tthebossbreh.github.io/game-d/**
+
 A single-player side-scrolling platformer built with the **Underwater Diving**
 asset pack, on an **Excalibur.js 0.32 + TypeScript + Vite + pnpm** stack.
 
