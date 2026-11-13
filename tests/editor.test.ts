@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyStamp,
+  capturePaletteStamp,
+  captureStamp,
   deleteEntityAt,
+  entityAt,
   eraseTile,
   forEachLine,
   inBounds,
@@ -115,6 +119,125 @@ describe('paintLine and paintBox', () => {
   });
 });
 
+describe('stamps', () => {
+  it('copies an inclusive block of tiles and remembers its layer', () => {
+    const level = makeLevel(6, 5);
+    paintTile(level, 'main', 1, 1, 3);
+    paintTile(level, 'main', 2, 2, 4);
+    const stamp = captureStamp(level, 'main', 1, 1, 2, 2);
+    expect(stamp).not.toBeNull();
+    expect(stamp).toMatchObject({ width: 2, height: 2, layer: 'main' });
+    expect(stamp?.tiles).toEqual([
+      [3, 0],
+      [0, 4],
+    ]);
+  });
+
+  it('clamps the copied region to the level and returns null when fully outside', () => {
+    const level = makeLevel(4, 4);
+    expect(captureStamp(level, 'main', -5, -5, -1, -1)).toBeNull();
+    const corner = captureStamp(level, 'main', 3, 3, 9, 9);
+    expect(corner).toMatchObject({ width: 1, height: 1 });
+  });
+
+  it('captures entities inside the region with relative offsets', () => {
+    const level = makeLevel(6, 5);
+    level.entities.push({ type: 'EntityFish', x: 20, y: 24 });
+    level.entities.push({ type: 'EntityMine', x: 500, y: 500 });
+    const stamp = captureStamp(level, 'main', 0, 0, 2, 2);
+    expect(stamp?.entities).toEqual([{ type: 'EntityFish', dx: 20, dy: 24 }]);
+  });
+
+  it('drops the whole block in one call', () => {
+    const level = makeLevel(8, 8);
+    const stamp = {
+      width: 2,
+      height: 2,
+      tiles: [
+        [2, 3],
+        [4, 5],
+      ],
+      entities: [],
+      layer: 'main' as const,
+    };
+    const result = applyStamp(level, 'main', stamp, 3, 4);
+    expect(result.tiles).toBe(4);
+    expect(level.main[4]?.slice(3, 5)).toEqual([2, 3]);
+    expect(level.main[5]?.slice(3, 5)).toEqual([4, 5]);
+  });
+
+  it('skips empty cells unless overwriteEmpty is set', () => {
+    const level = makeLevel(4, 4);
+    const stamp = {
+      width: 2,
+      height: 1,
+      tiles: [[0, 9]],
+      entities: [],
+      layer: 'main' as const,
+    };
+    paintTile(level, 'main', 0, 0, 7);
+    applyStamp(level, 'main', stamp, 0, 0);
+    expect(level.main[0]?.[0]).toBe(7);
+    expect(level.main[0]?.[1]).toBe(9);
+
+    applyStamp(level, 'main', stamp, 0, 0, { overwriteEmpty: true });
+    expect(level.main[0]?.[0]).toBe(0);
+  });
+
+  it('clears collision cells when stamping an empty collision region exactly', () => {
+    const level = makeLevel(4, 4);
+    paintTile(level, 'collision', 0, 0, 1);
+    const solid = captureStamp(level, 'collision', 0, 0, 0, 0);
+    expect(solid?.tiles).toEqual([[1]]);
+    const empty = { width: 1, height: 1, tiles: [[0]], entities: [], layer: 'collision' as const };
+    applyStamp(level, 'collision', empty, 0, 0, { overwriteEmpty: true });
+    expect(level.collision[0]?.[0]).toBe(0);
+  });
+
+  it('clips a block that hangs off the level edge', () => {
+    const level = makeLevel(5, 5);
+    const stamp = {
+      width: 2,
+      height: 2,
+      tiles: [
+        [1, 2],
+        [3, 4],
+      ],
+      entities: [],
+      layer: 'main' as const,
+    };
+    const result = applyStamp(level, 'main', stamp, 4, 4);
+    expect(result.tiles).toBe(1);
+    expect(level.main[4]?.[4]).toBe(1);
+  });
+
+  it('builds a palette stamp across columns', () => {
+    const stamp = capturePaletteStamp(8, 1, 0, 3, 1, 'front');
+    expect(stamp).toMatchObject({ width: 3, height: 2, layer: 'front' });
+    expect(stamp?.tiles).toEqual([
+      [2, 3, 4],
+      [10, 11, 12],
+    ]);
+  });
+
+  it('stamps entities and keeps only one player', () => {
+    const level = makeLevel(8, 8);
+    level.entities.push({ type: 'EntityPlayer', x: 0, y: 0 });
+    level.entities.push({ type: 'EntityFish', x: 20, y: 20 });
+    const stamp = captureStamp(level, 'main', 0, 0, 2, 2);
+    expect(stamp?.entities).toHaveLength(2);
+    if (!stamp) {
+      return;
+    }
+    const result = applyStamp(level, 'main', stamp, 4, 4);
+    expect(result.entities).toBe(2);
+    expect(level.entities.filter((e) => e.type === 'EntityPlayer')).toHaveLength(1);
+    expect(level.entities.filter((e) => e.type === 'EntityFish')).toHaveLength(2);
+    // 64px origin + 20px offset.
+    expect(level.entities[level.entities.length - 1]).toMatchObject({ x: 84, y: 84 });
+  });
+});
+
 describe('entities', () => {
   const fishSize: Size = { w: 32, h: 32 };
 
@@ -144,5 +267,15 @@ describe('entities', () => {
   it('returns null when nothing is under the point', () => {
     const level = makeLevel(4, 4);
     expect(deleteEntityAt(level, 10, 10, () => fishSize)).toBeNull();
+  });
+
+  it('finds the top-most entity without deleting it', () => {
+    const level = makeLevel(4, 4);
+    placeEntity(level, 'EntityFish', 100, 50, fishSize);
+    placeEntity(level, 'EntityMine', 100, 50, { w: 16, h: 16 });
+    const hit = entityAt(level, 100, 50, () => fishSize);
+    expect(hit?.type).toBe('EntityMine');
+    expect(level.entities).toHaveLength(2);
+    expect(entityAt(level, 10, 10, () => fishSize)).toBeNull();
   });
 });

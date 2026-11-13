@@ -10,15 +10,19 @@ import { BitmapFont } from './BitmapFont';
 export class Hud {
   private readonly font: BitmapFont;
   private readonly status: ScreenElement;
+  private readonly timer: ScreenElement;
   private readonly hint: ScreenElement;
   private lastStatus = '';
+  private lastTimer = '';
   private lastHint = '';
 
   constructor(scene: Scene) {
     this.font = new BitmapFont(img.ui.font);
     this.status = new ScreenElement({ x: 10, y: 8, anchor: vec(0, 0), z: 1000 });
+    this.timer = new ScreenElement({ x: VIEW.width - 10, y: 8, anchor: vec(1, 0), z: 1000 });
     this.hint = new ScreenElement({ x: 10, y: VIEW.height - 18, anchor: vec(0, 0), z: 1000 });
     scene.add(this.status);
+    scene.add(this.timer);
     scene.add(this.hint);
   }
 
@@ -28,6 +32,16 @@ export class Hud {
     }
     this.lastStatus = text;
     this.status.graphics.use(ImageSource.fromHtmlCanvasElement(this.font.toCanvas(text, 2, color)).toSprite());
+  }
+
+  /** Right-aligned level timer, re-rasterised only when the text or colour changes. */
+  setTimer(text: string, color = '#ffffff'): void {
+    const key = `${text}|${color}`;
+    if (key === this.lastTimer) {
+      return;
+    }
+    this.lastTimer = key;
+    this.timer.graphics.use(ImageSource.fromHtmlCanvasElement(this.font.toCanvas(text, 2, color)).toSprite());
   }
 
   setHint(text: string, color = '#8fe3b0'): void {

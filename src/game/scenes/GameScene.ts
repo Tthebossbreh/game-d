@@ -1,13 +1,4 @@
-import {
-  Actor,
-  Color,
-  ImageWrapping,
-  Keys,
-  Scene,
-  TiledSprite,
-  vec,
-  type Engine,
-} from 'excalibur';
+import { Actor, Color, ImageWrapping, Scene, TiledSprite, vec, type Engine } from 'excalibur';
 import { FX_FRAME, img } from '../assets';
 import { Sfx } from '../audio/Sfx';
 import { CAMERA, PLAYER, VIEW } from '../config';
@@ -33,6 +24,15 @@ function damp(current: number, target: number, lambda: number, dt: number): numb
   return target + (current - target) * Math.exp(-lambda * dt);
 }
 
+/** Timer label: `12.4` under a minute, `1:02.4` above. Always the same width. */
+function formatTime(seconds: number): string {
+  if (seconds >= 60) {
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}:${(seconds - minutes * 60).toFixed(1).padStart(4, '0')}`;
+  }
+  return seconds.toFixed(1).padStart(4, '0');
+}
+
 const EXPLOSION_BY_MINE: Record<string, FxName> = {
   mine: 'explosion',
   'mine-small': 'explosion-small',
@@ -53,7 +53,14 @@ export class GameScene extends Scene {
   private readonly goal = { x: VIEW.width / 2, y: VIEW.height / 2 };
   private score = 0;
   private time = 0;
-  private complete = false;
+  /** Level timer: starts on the first movement input, freezes at the exit. */
+  private lapTime = 0;
+  private lapRunning = false;
+  private lapStarted = false;
+  /** Counts down after the exit so the HUD can show a short "back to start" note. */
+  private loopNotice = 0;
+  /** Only the first trip to the exit earns the completion bonus. */
+  private reachedExit = false;
 
   onInitialize(engine: Engine): void {
     this.controls = new InputMap(engine);
@@ -101,17 +108,20 @@ export class GameScene extends Scene {
       return;
     }
     this.time += dt;
-
-    if (this.complete) {
-      this.hud.setHint('LEVEL COMPLETE - PRESS ENTER', '#f2d06b');
-      if (this.engine.input.keyboard.wasPressed(Keys.Enter)) {
-        void this.engine.goToScene('title');
-      }
-      this.syncActors();
-      return;
-    }
+    this.loopNotice = Math.max(0, this.loopNotice - dt);
 
     const input = this.controls.sample();
+    // Start timing on the first movement input; a beat after the exit lets the
+    // final lap time stay readable before the next lap begins.
+    const moving = input.left || input.right || input.jumpPressed || input.boostPressed;
+    if (!this.lapStarted && moving && this.loopNotice <= 0) {
+      this.lapStarted = true;
+      this.lapRunning = true;
+      this.lapTime = 0;
+    }
+    if (this.lapRunning) {
+      this.lapTime += dt;
+    }
     const events = this.player.step(input, dt, this.solids);
     if (events.jump) {
       Sfx.jump();
@@ -249,16 +259,29 @@ export class GameScene extends Scene {
   }
 
   private checkGoal(): void {
-    if (this.complete || this.player.dead) {
+    if (this.player.dead) {
       return;
     }
     const dx = this.player.centerX - this.goal.x;
     const dy = this.player.centerY - this.goal.y;
     if (dx * dx + dy * dy < 30 * 30) {
-      this.complete = true;
-      this.score += 100;
-      Sfx.pickup();
+      this.reachExit();
     }
+  }
+
+  /** Reaching the right exit loops the run: the diver restarts at the level start. */
+  private reachExit(): void {
+    // The lap ends here; the frozen time stays on the HUD until the next move.
+    this.lapRunning = false;
+    this.lapStarted = false;
+    if (!this.reachedExit) {
+      this.reachedExit = true;
+      this.score += 100;
+    }
+    Sfx.pickup();
+    this.spawnFx('bubbles', this.player.centerX, this.player.centerY, 22);
+    this.respawn();
+    this.loopNotice = 1.5;
   }
 
   private explode(state: EnemyState): void {
@@ -280,6 +303,19 @@ export class GameScene extends Scene {
       state.x = state.homeX;
       state.y = state.homeY;
     }
+    this.snapCamera();
+  }
+
+  /** Jump the camera straight to the player after a respawn instead of panning across the cave. */
+  private snapCamera(): void {
+    this.camera.pos = vec(
+      clamp(this.player.centerX, VIEW.width / 2, LEVEL.pixelWidth - VIEW.width / 2),
+      clamp(this.player.centerY, VIEW.height / 2, LEVEL.pixelHeight - VIEW.height / 2),
+    );
+    const left = this.camera.pos.x - VIEW.width / 2;
+    const top = this.camera.pos.y - VIEW.height / 2;
+    this.background.pos = vec(left * 0.25, top * 0.25);
+    this.midground.pos = vec(left * 0.5, top * 0.5);
   }
 
   private syncActors(): void {
@@ -315,6 +351,17 @@ export class GameScene extends Scene {
   private updateHud(): void {
     const vigor = '#'.repeat(Math.max(0, this.player.health)) + '-'.repeat(Math.max(0, PLAYER.maxHealth - this.player.health));
     this.hud.setStatus(`SCORE ${this.score.toString().padStart(4, '0')}  VIGOR [${vigor}]`);
-    this.hud.setHint('REACH THE RIGHT EXIT', '#8fe3b0');
+    if (this.lapRunning) {
+      this.hud.setTimer(`TIME ${formatTime(this.lapTime)}`, '#ffffff');
+    } else if (this.lapTime > 0) {
+      this.hud.setTimer(`TIME ${formatTime(this.lapTime)}`, '#f2d06b');
+    } else {
+      this.hud.setTimer('TIME --.-', '#6f8f9f');
+    }
+    if (this.loopNotice > 0) {
+      this.hud.setHint('EXIT REACHED - BACK TO THE START', '#f2d06b');
+    } else {
+      this.hud.setHint('REACH THE RIGHT EXIT', '#8fe3b0');
+    }
   }
 }

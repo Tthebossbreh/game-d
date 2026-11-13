@@ -7,7 +7,8 @@ asset pack, on an **Excalibur.js 0.32 + TypeScript + Vite + pnpm** stack.
 
 You play a diver descending a flooded cave: run, jump and boost through the
 rock, stomp or dash through fish, avoid mines, collect drifting bubbles and
-reach the glowing exit on the far right.
+reach the glowing exit on the far right. Touching the exit loops the run: you
+respawn back at the level start with your score intact.
 
 ![Gameplay](docs/screenshot.png)
 
@@ -42,8 +43,12 @@ http://localhost:5173/editor.html
 | Box | `R` | Click-drag to fill a rectangle |
 | Eraser | `E` | Clear tiles (also works as a brush) |
 | Entity | `T` | Click to place the selected fish, mine, pickup or the player |
+| Remove | `D` | Click or drag over entities to delete them |
+| Stamp | `S` | Drop a whole copied block of tiles in one click |
 
 Other editor features:
+
+- **Stamps** — drag a rectangle in the palette, or `Alt`+drag on the map, to copy a block (entities included when copied from the map). Click or drag with the Stamp tool to drop the whole block; the hovered ghost shows exactly where it lands.
 
 - **Layers** — paint the `main` tiles, the `front` props, or the `collision` grid.
 - **Palette** — pick a tile from `tiles.png` / `props.png`; zoom 1×–3×.
@@ -63,13 +68,12 @@ editor (including the player start) takes effect on the next page load.
 | Action | Keys |
 | --- | --- |
 | Move | `←` `→` or `A` `D` |
-| Jump / swim up (hold) | `Space`, `↑` or `W` |
+| Jump | `Space`, `↑` or `W` |
 | Boost (also your attack) | `Shift`, `X` or `Z` |
-| Sink faster | `↓` or `S` |
 | Confirm | `Enter` |
 
-Holding jump underwater keeps lifting the diver, so the open cave is traversable
-in any direction. Boosting into a fish destroys it; so does landing on one.
+Jumps use low gravity for a tall, floaty arc that clears the cave's ledges.
+Boosting into a fish destroys it; so does landing on one.
 
 ## Assets
 

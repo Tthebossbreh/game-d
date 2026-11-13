@@ -1,6 +1,10 @@
 import rawLevel from '../game/levels/level1.json';
 import {
+  applyStamp,
+  capturePaletteStamp,
+  captureStamp,
   deleteEntityAt,
+  entityAt,
   eraseTile,
   forEachLine,
   paintBox,
@@ -8,12 +12,13 @@ import {
   paintTile,
   placeEntity,
   type LayerName,
+  type Stamp,
 } from './tools';
 import './editor.css';
 
 /* ------------------------------------------------------------------ types */
 
-type ToolName = 'brush' | 'line' | 'box' | 'eraser' | 'entity';
+type ToolName = 'brush' | 'line' | 'box' | 'eraser' | 'entity' | 'remove' | 'stamp';
 
 interface EntityJSON {
   type: string;
@@ -42,7 +47,7 @@ interface EntityDef {
 }
 
 interface DragState {
-  mode: 'paint' | 'erase' | 'line' | 'box' | 'pan';
+  mode: 'paint' | 'erase' | 'line' | 'box' | 'pan' | 'stamp' | 'capture' | 'remove';
   startTileX: number;
   startTileY: number;
   lastTileX: number;
@@ -85,6 +90,11 @@ const state = {
   tool: 'brush' as ToolName,
   selectedTile: { main: 1, front: 1 } as Record<'main' | 'front', number>,
   entityType: 'EntityFish',
+  stamp: null as Stamp | null,
+  captureMode: false,
+  paletteRect: null as { x0: number; y0: number; x1: number; y1: number } | null,
+  hover: null as { tx: number; ty: number } | null,
+  hoverWorld: null as { x: number; y: number } | null,
   zoom: 1,
   panX: 0,
   panY: 0,
@@ -118,6 +128,14 @@ if (!pctxOrNull) {
 }
 const pctx: CanvasRenderingContext2D = pctxOrNull;
 
+const stampCanvas = el<HTMLCanvasElement>('stamp-preview');
+const sctxOrNull = stampCanvas.getContext('2d');
+if (!sctxOrNull) {
+  throw new Error('2D canvas unavailable');
+}
+const sctx: CanvasRenderingContext2D = sctxOrNull;
+const stampLabel = el<HTMLSpanElement>('stamp-label');
+
 const statusEl = el<HTMLDivElement>('status');
 const tileLabel = el<HTMLSpanElement>('tile-label');
 
@@ -128,6 +146,7 @@ tilesImg.src = 'assets/env/tiles.png';
 tilesImg.addEventListener('load', () => {
   markDirty();
   renderPalette();
+  renderStampPreview();
 });
 
 const propsImg = new Image();
@@ -135,6 +154,7 @@ propsImg.src = 'assets/env/props.png';
 propsImg.addEventListener('load', () => {
   markDirty();
   renderPalette();
+  renderStampPreview();
 });
 
 /* ---------------------------------------------------------------- history */
@@ -356,7 +376,13 @@ function drawGrid(sx0: number, sy0: number, sx1: number, sy1: number): void {
 
 function drawPreview(): void {
   const drag = state.drag;
-  if (!drag || drag.mode === 'pan' || drag.mode === 'paint' || drag.mode === 'erase') {
+  if (
+    !drag ||
+    drag.mode === 'pan' ||
+    drag.mode === 'paint' ||
+    drag.mode === 'erase' ||
+    drag.mode === 'stamp'
+  ) {
     return;
   }
   const T = state.level.tilesize;
@@ -368,7 +394,7 @@ function drawPreview(): void {
   ctx.save();
   ctx.strokeStyle = '#f2d06b';
   ctx.lineWidth = 2;
-  if (drag.mode === 'box') {
+  if (drag.mode === 'box' || drag.mode === 'capture') {
     ctx.strokeRect(
       (x0 * T - state.panX) * z + 1,
       (y0 * T - state.panY) * z + 1,
@@ -379,6 +405,108 @@ function drawPreview(): void {
     forEachLine(drag.startTileX, drag.startTileY, drag.lastTileX, drag.lastTileY, (x, y) => {
       ctx.strokeRect((x * T - state.panX) * z + 1, (y * T - state.panY) * z + 1, T * z - 2, T * z - 2);
     });
+  }
+  ctx.restore();
+}
+
+/** Image + column count used to draw a layer's tile ids. */
+function stampImageFor(layer: LayerName): { image: HTMLImageElement; cols: number } {
+  if (layer === 'front') {
+    return { image: propsImg, cols: state.level.tilesets.front.cols };
+  }
+  return { image: tilesImg, cols: state.level.tilesets.main.cols };
+}
+
+/** Highlight the entity a Remove-tool click would delete. */
+function drawEntityHover(): void {
+  if (state.tool !== 'remove' || !state.hoverWorld) {
+    return;
+  }
+  const target = entityAt(state.level, state.hoverWorld.x, state.hoverWorld.y, entityDef);
+  if (!target) {
+    return;
+  }
+  const def = entityDef(target.type);
+  const z = state.zoom;
+  const dx = (target.x - state.panX) * z;
+  const dy = (target.y - state.panY) * z;
+  ctx.save();
+  ctx.fillStyle = 'rgba(255, 80, 80, 0.25)';
+  ctx.fillRect(dx, dy, def.w * z, def.h * z);
+  ctx.strokeStyle = '#ff5252';
+  ctx.setLineDash([4, 3]);
+  ctx.lineWidth = 2;
+  ctx.strokeRect(dx + 1, dy + 1, Math.max(1, def.w * z - 2), Math.max(1, def.h * z - 2));
+  ctx.restore();
+}
+
+/** Draw the hovered stamp at the cursor so you can see the whole block before dropping it. */
+function drawStampGhost(): void {
+  const stamp = state.stamp;
+  const hover = state.hover;
+  if (!stamp || !hover || state.tool !== 'stamp') {
+    return;
+  }
+  const T = state.level.tilesize;
+  const z = state.zoom;
+  const px = (hover.tx * T - state.panX) * z;
+  const py = (hover.ty * T - state.panY) * z;
+
+  ctx.save();
+  ctx.globalAlpha = 0.6;
+  if (stamp.layer === 'collision') {
+    ctx.fillStyle = 'rgba(255, 80, 80, 0.45)';
+    for (let row = 0; row < stamp.height; row++) {
+      for (let col = 0; col < stamp.width; col++) {
+        if ((stamp.tiles[row]?.[col] ?? 0) <= 0) {
+          continue;
+        }
+        ctx.fillRect(px + col * T * z, py + row * T * z, T * z, T * z);
+      }
+    }
+  } else {
+    const { image, cols } = stampImageFor(stamp.layer);
+    if (image.complete && image.naturalWidth > 0) {
+      for (let row = 0; row < stamp.height; row++) {
+        for (let col = 0; col < stamp.width; col++) {
+          const id = stamp.tiles[row]?.[col] ?? 0;
+          if (id <= 0) {
+            continue;
+          }
+          const index = id - 1;
+          ctx.drawImage(
+            image,
+            (index % cols) * T,
+            Math.floor(index / cols) * T,
+            T,
+            T,
+            px + col * T * z,
+            py + row * T * z,
+            T * z,
+            T * z,
+          );
+        }
+      }
+    }
+  }
+
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = '#f2d06b';
+  ctx.setLineDash([5, 4]);
+  ctx.lineWidth = 2;
+  ctx.strokeRect(px + 1, py + 1, stamp.width * T * z - 2, stamp.height * T * z - 2);
+  ctx.setLineDash([]);
+
+  for (const entity of stamp.entities) {
+    const def = entityDef(entity.type);
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = def.color;
+    ctx.fillRect(
+      (hover.tx * T + entity.dx - state.panX) * z,
+      (hover.ty * T + entity.dy - state.panY) * z,
+      def.w * z,
+      def.h * z,
+    );
   }
   ctx.restore();
 }
@@ -416,9 +544,11 @@ function render(): void {
     drawCollision(sx0, sy0, sx1, sy1);
   }
   drawEntities();
+  drawEntityHover();
   if (state.showGrid && z >= 0.35) {
     drawGrid(sx0, sy0, sx1, sy1);
   }
+  drawStampGhost();
   drawPreview();
   drawBorder();
 }
@@ -469,11 +599,29 @@ function renderPalette(): void {
     pctx.lineWidth = 2;
     pctx.strokeRect(cx + 1, cy + 1, T * pz - 2, T * pz - 2);
   }
+
+  const rect = state.paletteRect;
+  if (rect) {
+    const x0 = Math.min(rect.x0, rect.x1);
+    const x1 = Math.max(rect.x0, rect.x1);
+    const y0 = Math.min(rect.y0, rect.y1);
+    const y1 = Math.max(rect.y0, rect.y1);
+    pctx.strokeStyle = '#8fe3b0';
+    pctx.setLineDash([4, 3]);
+    pctx.lineWidth = 2;
+    pctx.strokeRect(
+      x0 * T * pz + 1,
+      y0 * T * pz + 1,
+      (x1 - x0 + 1) * T * pz - 2,
+      (y1 - y0 + 1) * T * pz - 2,
+    );
+    pctx.setLineDash([]);
+  }
 }
 
-palette.addEventListener('click', (event) => {
+function paletteTileAt(event: PointerEvent): { x: number; y: number } | null {
   if (state.layer === 'collision') {
-    return;
+    return null;
   }
   const { image, cols } = paletteImage();
   const T = state.level.tilesize;
@@ -483,12 +631,76 @@ palette.addEventListener('click', (event) => {
   const py = Math.floor((event.clientY - rect.top) / (T * pz));
   const rows = Math.floor(image.naturalHeight / T);
   if (px < 0 || py < 0 || px >= cols || py >= rows) {
+    return null;
+  }
+  return { x: px, y: py };
+}
+
+let paletteDrag: { startX: number; startY: number; moved: boolean } | null = null;
+
+palette.addEventListener('pointerdown', (event) => {
+  if (event.button !== 0) {
     return;
   }
-  state.selectedTile[state.layer] = py * cols + px + 1;
+  const tile = paletteTileAt(event);
+  if (!tile) {
+    return;
+  }
+  try {
+    palette.setPointerCapture(event.pointerId);
+  } catch {
+    /* ignore — dragging still works without capture */
+  }
+  paletteDrag = { startX: tile.x, startY: tile.y, moved: false };
+  state.paletteRect = { x0: tile.x, y0: tile.y, x1: tile.x, y1: tile.y };
+  state.selectedTile[state.layer as 'main' | 'front'] = tile.y * paletteImage().cols + tile.x + 1;
   updateTileLabel();
   renderPalette();
-  markDirty();
+});
+
+palette.addEventListener('pointermove', (event) => {
+  const drag = paletteDrag;
+  if (!drag) {
+    return;
+  }
+  const tile = paletteTileAt(event);
+  if (!tile) {
+    return;
+  }
+  drag.moved = true;
+  state.paletteRect = { x0: drag.startX, y0: drag.startY, x1: tile.x, y1: tile.y };
+  renderPalette();
+});
+
+function finishPaletteDrag(): void {
+  const drag = paletteDrag;
+  paletteDrag = null;
+  const rect = state.paletteRect;
+  state.paletteRect = null;
+  if (!drag || !rect || !drag.moved || state.layer === 'collision') {
+    renderPalette();
+    return;
+  }
+  const stamp = capturePaletteStamp(
+    paletteImage().cols,
+    rect.x0,
+    rect.y0,
+    rect.x1,
+    rect.y1,
+    state.layer as 'main' | 'front',
+  );
+  if (stamp) {
+    setStamp(stamp, `Copied ${stamp.width}\u00d7${stamp.height} block from the palette`);
+  } else {
+    renderPalette();
+  }
+}
+
+palette.addEventListener('pointerup', finishPaletteDrag);
+palette.addEventListener('pointercancel', () => {
+  paletteDrag = null;
+  state.paletteRect = null;
+  renderPalette();
 });
 
 function updateTileLabel(): void {
@@ -499,15 +711,137 @@ function updateTileLabel(): void {
   tileLabel.textContent = `#${state.selectedTile[state.layer]}`;
 }
 
+/* ----------------------------------------------------------------- stamps */
+
+function setStamp(stamp: Stamp, message: string): void {
+  state.stamp = stamp;
+  if (state.layer !== stamp.layer) {
+    state.layer = stamp.layer;
+    updateLayerUI();
+  }
+  setTool('stamp');
+  renderStampPreview();
+  updateStampUI();
+  markDirty();
+  toast(`${message} — click the map to place it`);
+}
+
+function clearStamp(): void {
+  state.stamp = null;
+  state.captureMode = false;
+  renderStampPreview();
+  updateStampUI();
+  markDirty();
+  toast('Stamp cleared');
+}
+
+function renderStampPreview(): void {
+  const stamp = state.stamp;
+  const wrap = el<HTMLDivElement>('stamp-wrap');
+  if (!stamp) {
+    stampLabel.textContent = 'none';
+    stampCanvas.width = 0;
+    stampCanvas.height = 0;
+    stampCanvas.style.width = '0px';
+    stampCanvas.style.height = '0px';
+    wrap.classList.add('empty');
+    return;
+  }
+  wrap.classList.remove('empty');
+  stampLabel.textContent = `${stamp.width}\u00d7${stamp.height}`;
+  const T = state.level.tilesize;
+  const pz = Math.max(1, Math.min(3, Math.floor(264 / (stamp.width * T))));
+  const w = stamp.width * T * pz;
+  const h = stamp.height * T * pz;
+  stampCanvas.width = w;
+  stampCanvas.height = h;
+  stampCanvas.style.width = `${w}px`;
+  stampCanvas.style.height = `${h}px`;
+  sctx.imageSmoothingEnabled = false;
+  sctx.clearRect(0, 0, w, h);
+
+  if (stamp.layer === 'collision') {
+    sctx.fillStyle = 'rgba(255, 80, 80, 0.55)';
+    for (let row = 0; row < stamp.height; row++) {
+      for (let col = 0; col < stamp.width; col++) {
+        if ((stamp.tiles[row]?.[col] ?? 0) > 0) {
+          sctx.fillRect(col * T * pz, row * T * pz, T * pz, T * pz);
+        }
+      }
+    }
+  } else {
+    const { image, cols } = stampImageFor(stamp.layer);
+    if (image.complete && image.naturalWidth > 0) {
+      for (let row = 0; row < stamp.height; row++) {
+        for (let col = 0; col < stamp.width; col++) {
+          const id = stamp.tiles[row]?.[col] ?? 0;
+          if (id <= 0) {
+            continue;
+          }
+          const index = id - 1;
+          sctx.drawImage(
+            image,
+            (index % cols) * T,
+            Math.floor(index / cols) * T,
+            T,
+            T,
+            col * T * pz,
+            row * T * pz,
+            T * pz,
+            T * pz,
+          );
+        }
+      }
+    }
+  }
+
+  sctx.globalAlpha = 0.8;
+  for (const entity of stamp.entities) {
+    const def = entityDef(entity.type);
+    sctx.fillStyle = def.color;
+    sctx.fillRect(entity.dx * pz, entity.dy * pz, def.w * pz, def.h * pz);
+  }
+  sctx.globalAlpha = 1;
+}
+
+/** Drop the whole stamp with its top-left at the given tile. */
+function stampAt(tx: number, ty: number): void {
+  const stamp = state.stamp;
+  if (!stamp) {
+    return;
+  }
+  if (state.layer !== stamp.layer) {
+    state.layer = stamp.layer;
+    updateLayerUI();
+  }
+  applyStamp(state.level, stamp.layer, stamp, tx, ty);
+}
+
 /* ------------------------------------------------------------- ui wiring */
 
 function setTool(tool: ToolName): void {
   state.tool = tool;
+  if (tool !== 'remove') {
+    state.hoverWorld = null;
+  }
+  if (tool !== 'stamp') {
+    state.hover = null;
+  }
   document.querySelectorAll<HTMLButtonElement>('#tool-seg button').forEach((button) => {
     button.classList.toggle('active', button.dataset.tool === tool);
   });
-  canvas.style.cursor = tool === 'entity' ? 'copy' : tool === 'eraser' ? 'cell' : 'crosshair';
+  canvas.style.cursor = toolCursor();
   markDirty();
+}
+
+function toolCursor(): string {
+  if (state.tool === 'entity' || state.tool === 'stamp') {
+    return 'copy';
+  }
+  if (state.tool === 'remove') {
+    return 'not-allowed';
+  }
+  return state.tool === 'eraser' ? 'cell' : 'crosshair';
 }
 
 function updateLayerUI(): void {
@@ -554,6 +888,11 @@ function updateEntityUI(): void {
 
 function updateGridButton(): void {
   el('grid').classList.toggle('active', state.showGrid);
+}
+
+function updateStampUI(): void {
+  el('stamp-capture').classList.toggle('active', state.captureMode);
+  el<HTMLButtonElement>('stamp-clear').disabled = state.stamp === null;
 }
 
 /* -------------------------------------------------------------- geometry */
@@ -604,6 +943,17 @@ function removeEntityAt(wx: number, wy: number): void {
   }
 }
 
+let removedDuringDrag = 0;
+
+/** Delete without committing, so a whole drag becomes one undo step. */
+function deleteEntityAtPoint(wx: number, wy: number): string | null {
+  const removed = deleteEntityAt(state.level, wx, wy, entityDef);
+  if (removed) {
+    markDirty();
+  }
+  return removed;
+}
+
 /* --------------------------------------------------------------- pointer */
 
 let spaceHeld = false;
@@ -650,6 +1000,61 @@ canvas.addEventListener('pointerdown', (event) => {
     return;
   }
 
+  if (state.tool === 'remove') {
+    removedDuringDrag = 0;
+    state.drag = {
+      mode: 'remove',
+      startTileX: info.tx,
+      startTileY: info.ty,
+      lastTileX: info.tx,
+      lastTileY: info.ty,
+      screenX: event.clientX,
+      screenY: event.clientY,
+      panStartX: state.panX,
+      panStartY: state.panY,
+    };
+    state.hoverWorld = { x: info.wx, y: info.wy };
+    if (deleteEntityAtPoint(info.wx, info.wy)) {
+      removedDuringDrag += 1;
+    }
+    markDirty();
+    return;
+  }
+
+  if (state.tool === 'stamp') {
+    if (event.altKey || state.captureMode || !state.stamp) {
+      state.captureMode = false;
+      updateStampUI();
+      state.drag = {
+        mode: 'capture',
+        startTileX: info.tx,
+        startTileY: info.ty,
+        lastTileX: info.tx,
+        lastTileY: info.ty,
+        screenX: event.clientX,
+        screenY: event.clientY,
+        panStartX: state.panX,
+        panStartY: state.panY,
+      };
+      markDirty();
+      return;
+    }
+    state.drag = {
+      mode: 'stamp',
+      startTileX: info.tx,
+      startTileY: info.ty,
+      lastTileX: info.tx,
+      lastTileY: info.ty,
+      screenX: event.clientX,
+      screenY: event.clientY,
+      panStartX: state.panX,
+      panStartY: state.panY,
+    };
+    stampAt(info.tx, info.ty);
+    markDirty();
+    return;
+  }
+
   if (state.tool === 'line' || state.tool === 'box') {
     state.drag = {
       mode: state.tool,
@@ -687,8 +1092,21 @@ canvas.addEventListener('pointerdown', (event) => {
 });
 
 canvas.addEventListener('pointermove', (event) => {
+  const info = pointerInfo(event);
   const drag = state.drag;
   if (!drag) {
+    if (state.tool === 'stamp' && state.stamp) {
+      if (!state.hover || state.hover.tx !== info.tx || state.hover.ty !== info.ty) {
+        state.hover = { tx: info.tx, ty: info.ty };
+        markDirty();
+      }
+    } else if (state.tool === 'remove') {
+      const prev = state.hoverWorld;
+      if (!prev || prev.x !== info.wx || prev.y !== info.wy) {
+        state.hoverWorld = { x: info.wx, y: info.wy };
+        markDirty();
+      }
+    }
     return;
   }
 
@@ -701,9 +1119,29 @@ canvas.addEventListener('pointermove', (event) => {
     return;
   }
 
-  const info = pointerInfo(event);
+  if (drag.mode === 'remove') {
+    const T = state.level.tilesize;
+    forEachLine(drag.lastTileX, drag.lastTileY, info.tx, info.ty, (x, y) => {
+      if (deleteEntityAtPoint((x + 0.5) * T, (y + 0.5) * T)) {
+        removedDuringDrag += 1;
+      }
+    });
+    state.hoverWorld = { x: info.wx, y: info.wy };
+    drag.lastTileX = info.tx;
+    drag.lastTileY = info.ty;
+    markDirty();
+    return;
+  }
 
-  if (drag.mode === 'line' || drag.mode === 'box') {
+  if (drag.mode === 'line' || drag.mode === 'box' || drag.mode === 'capture') {
+    drag.lastTileX = info.tx;
+    drag.lastTileY = info.ty;
+    markDirty();
+    return;
+  }
+
+  if (drag.mode === 'stamp') {
+    forEachLine(drag.lastTileX, drag.lastTileY, info.tx, info.ty, (x, y) => stampAt(x, y));
     drag.lastTileX = info.tx;
     drag.lastTileY = info.ty;
     markDirty();
@@ -723,12 +1161,20 @@ canvas.addEventListener('pointermove', (event) => {
   markDirty();
 });
 
+canvas.addEventListener('pointerleave', () => {
+  if (state.hover || state.hoverWorld) {
+    state.hover = null;
+    state.hoverWorld = null;
+    markDirty();
+  }
+});
+
 function endDrag(event: PointerEvent): void {
   const drag = state.drag;
   if (!drag) {
     return;
   }
-  canvas.style.cursor = state.tool === 'entity' ? 'copy' : state.tool === 'eraser' ? 'cell' : 'crosshair';
+  canvas.style.cursor = toolCursor();
 
   if (drag.mode === 'pan') {
     state.drag = null;
@@ -737,12 +1183,36 @@ function endDrag(event: PointerEvent): void {
 
   const info = pointerInfo(event);
 
-  if (drag.mode === 'line') {
+  if (drag.mode === 'capture') {
+    const stamp = captureStamp(
+      state.level,
+      state.layer,
+      drag.startTileX,
+      drag.startTileY,
+      info.tx,
+      info.ty,
+    );
+    if (stamp) {
+      setStamp(stamp, `Copied ${stamp.width}\u00d7${stamp.height} from the map`);
+    } else {
+      toast('Nothing to capture there');
+    }
+  } else if (drag.mode === 'line') {
     paintLine(state.level, state.layer, drag.startTileX, drag.startTileY, info.tx, info.ty, currentTileId());
     commit();
   } else if (drag.mode === 'box') {
     paintBox(state.level, state.layer, drag.startTileX, drag.startTileY, info.tx, info.ty, currentTileId());
     commit();
+  } else if (drag.mode === 'stamp') {
+    commit();
+    const stamp = state.stamp;
+    toast(stamp ? `Stamped ${stamp.width}\u00d7${stamp.height}` : 'Stamped');
+  } else if (drag.mode === 'remove') {
+    if (removedDuringDrag > 0) {
+      commit();
+      toast(`Removed ${removedDuringDrag} ${removedDuringDrag === 1 ? 'entity' : 'entities'}`);
+    }
+    removedDuringDrag = 0;
   } else {
     commit();
   }
@@ -891,6 +1361,14 @@ el('grid').addEventListener('click', () => {
   markDirty();
 });
 
+el('stamp-capture').addEventListener('click', () => {
+  state.captureMode = true;
+  setTool('stamp');
+  updateStampUI();
+  toast('Drag a rectangle on the map to copy it');
+});
+el('stamp-clear').addEventListener('click', clearStamp);
+
 el('save').addEventListener('click', () => {
   void saveToProject();
 });
@@ -958,6 +1436,12 @@ window.addEventListener('keydown', (event) => {
     case 't':
       setTool('entity');
       break;
+    case 's':
+      setTool('stamp');
+      break;
+    case 'd':
+      setTool('remove');
+      break;
     case 'g':
       state.showGrid = !state.showGrid;
       updateGridButton();
@@ -983,6 +1467,8 @@ if (typeof ResizeObserver !== 'undefined') {
 
 buildEntityList();
 updateLayerUI();
+updateStampUI();
+renderStampPreview();
 resizeView();
 fitView();
 resetHistory();

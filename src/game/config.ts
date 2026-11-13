@@ -28,13 +28,11 @@ export const PLAYER = {
   groundFriction: 1100,
   airAccel: 620,
   airDrag: 260,
-  gravity: 900,
+  /** Low-gravity platforming: a floaty arc instead of swimming. */
+  gravity: 420,
   maxFall: 430,
   /** Instant upward kick when jumping off the ground. */
-  jumpSpeed: 320,
-  /** Holding jump underwater keeps lifting the diver. */
-  swimUpAccel: 1500,
-  swimMaxRise: 170,
+  jumpSpeed: 340,
   coyoteTime: 0.1,
   jumpBufferTime: 0.12,
   /** Horizontal burst. Doubles as the attack. */

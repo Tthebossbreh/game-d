@@ -5,9 +5,6 @@ import { moveAndCollide } from '../physics/kinematic';
 export interface PlayerInput {
   left: boolean;
   right: boolean;
-  up: boolean;
-  down: boolean;
-  jumpHeld: boolean;
   jumpPressed: boolean;
   boostPressed: boolean;
 }
@@ -25,9 +22,8 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Engine-free player simulation. The diver is a standard gravity platformer
- * with one underwater twist: holding jump keeps adding lift, so the open cave
- * is traversable in any direction.
+ * Engine-free player simulation: a low-gravity platformer. Jumping is the only
+ * way up — there is no swimming lift once the diver leaves the ground.
  */
 export class PlayerState {
   x: number;
@@ -133,13 +129,6 @@ export class PlayerState {
       this.coyote = 0;
       this.onGround = false;
       events.jump = true;
-    }
-
-    if ((input.jumpHeld || input.up) && this.vy > -PLAYER.swimMaxRise) {
-      this.vy = Math.max(-PLAYER.swimMaxRise, this.vy - PLAYER.swimUpAccel * dt);
-    }
-    if (input.down && this.vy < PLAYER.maxFall) {
-      this.vy += PLAYER.swimUpAccel * 0.6 * dt;
     }
 
     this.vy += PLAYER.gravity * dt;

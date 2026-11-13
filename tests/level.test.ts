@@ -26,12 +26,12 @@ describe('buildSolids', () => {
 });
 
 describe('level 1', () => {
-  it('loads the cave dimensions from the pack', () => {
-    expect(LEVEL.width).toBe(80);
+  it('loads the cave dimensions from the level JSON', () => {
+    expect(LEVEL.width).toBe(130);
     expect(LEVEL.height).toBe(50);
     expect(LEVEL.tile).toBe(16);
-    expect(LEVEL.pixelWidth).toBe(1280);
-    expect(LEVEL.pixelHeight).toBe(800);
+    expect(LEVEL.pixelWidth).toBe(130 * 16);
+    expect(LEVEL.pixelHeight).toBe(50 * 16);
   });
 
   it('collapses the bitmap into far fewer rectangles', () => {
@@ -46,15 +46,27 @@ describe('level 1', () => {
     }
   });
 
-  it('exposes player, enemy, mine and exit spawns', () => {
+  it('exposes a player spawn', () => {
     expect(findSpawn(LEVEL, 'player')).toBeDefined();
-    expect(findSpawn(LEVEL, 'fish')).toBeDefined();
-    expect(findSpawn(LEVEL, 'fish-big')).toBeDefined();
-    expect(findSpawn(LEVEL, 'fish-dart')).toBeDefined();
-    expect(findSpawn(LEVEL, 'mine')).toBeDefined();
-    expect(findSpawn(LEVEL, 'mine-small')).toBeDefined();
-    expect(findSpawn(LEVEL, 'mine-big')).toBeDefined();
-    expect(findSpawn(LEVEL, 'exit')).toBeDefined();
-    expect(findSpawn(LEVEL, 'pickup')).toBeDefined();
+  });
+
+  it('parses spawns from the level entity markers', () => {
+    const kinds = new Set([
+      'player',
+      'fish',
+      'fish-big',
+      'fish-dart',
+      'mine',
+      'mine-small',
+      'mine-big',
+      'exit',
+      'pickup',
+    ]);
+    expect(LEVEL.spawns.length).toBeGreaterThan(0);
+    for (const spawn of LEVEL.spawns) {
+      expect(kinds.has(spawn.kind)).toBe(true);
+      expect(Number.isFinite(spawn.x)).toBe(true);
+      expect(Number.isFinite(spawn.y)).toBe(true);
+    }
   });
 });

@@ -30,6 +30,8 @@
             <button data-tool="box" title="Box (R)">Box</button>
             <button data-tool="eraser" title="Eraser (E)">Eraser</button>
             <button data-tool="entity" title="Entity (T)">Entity</button>
+            <button data-tool="remove" title="Remove entities (D)">Remove</button>
+            <button data-tool="stamp" title="Stamp (S)">Stamp</button>
           </div>
         </section>
 
@@ -40,6 +42,16 @@
             <button data-pz="1">1&times;</button>
             <button data-pz="2" class="active">2&times;</button>
             <button data-pz="3">3&times;</button>
+          </div>
+        </section>
+
+        <section class="group" id="stamp-group">
+          <h2>Stamp <span id="stamp-label" class="muted">none</span></h2>
+          <div id="stamp-wrap"><canvas id="stamp-preview"></canvas></div>
+          <p class="hint-line">Drag in the palette to copy a block, or Alt+drag the map. Click drops the whole stamp.</p>
+          <div class="row">
+            <button id="stamp-capture" title="Copy a rectangle from the map">Copy map area</button>
+            <button id="stamp-clear" title="Forget the current stamp">Clear</button>
           </div>
         </section>
 
@@ -69,7 +81,7 @@
           <button id="fit" title="Fit to view">Fit</button>
           <button id="grid" class="active" title="Toggle grid (G)">Grid</button>
         </div>
-        <div id="hint">Wheel = zoom &middot; Middle / Space + drag = pan &middot; Right-click = delete entity</div>
+        <div id="hint">Wheel = zoom &middot; Middle / Space + drag = pan &middot; Right-click = delete entity &middot; Alt+drag = copy stamp</div>
       </main>
     </div>
     <script type="module" src="/src/editor/main.ts"></script>
