@@ -20,9 +20,6 @@ export class InputMap {
     const input: PlayerInput = {
       left: kb.isHeld(Keys.Left) || kb.isHeld(Keys.A),
       right: kb.isHeld(Keys.Right) || kb.isHeld(Keys.D),
-      up: kb.isHeld(Keys.Up) || kb.isHeld(Keys.W),
-      down: kb.isHeld(Keys.Down) || kb.isHeld(Keys.S),
-      jumpHeld,
       jumpPressed: jumpHeld && !this.jumpWasHeld,
       boostPressed: boostHeld && !this.boostWasHeld,
     };

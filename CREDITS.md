@@ -1,15 +1,17 @@
-# Credit
+# Credits
 
-Underwater Like Fanfare (Bi_N) CC-BY 4.0, https://opengameart.org/content/underwater-like-fanfare
+## Art & UI
 
-Bubble Sound Effects (BMacZero) CC0, https://opengameart.org/content/bubble-sound-effects
+“Underwater Diving Pack” by ansimuz (Luis Zuno), licensed CC0: https://opengameart.org/content/underwater-diving-pack
 
-https://opengameart.org/content/underwater-theme
-underwater theme
-cleytonkauffman
-Cc0
+“04b03 bitmap font” by 04 (Yuji Oshimoto), licensed CC0 as distributed in the Underwater Diving Pack: https://opengameart.org/content/underwater-diving-pack
 
-https://opengameart.org/content/underwater-diving-pack
-underwater diving pack
-ansimuz
-cc0
+## Audio
+
+“Watery Cave” and “Watery Cave (loop)” by Pascal Belisle, licensed free to use with credit: https://soundcloud.com/pascalbelisle
+
+“Bubble Sound Effects” by BMacZero, licensed CC0: https://opengameart.org/content/bubble-sound-effects
+
+“Underwater Theme” by CleytonKauffman, licensed CC0: https://opengameart.org/content/underwater-theme
+
+“Underwater Like Fanfare” by Bi_N, licensed CC-BY 4.0: https://opengameart.org/content/underwater-like-fanfare

@@ -20,12 +20,18 @@ body {
   justify-content: center;
   width: 100vw;
   height: 100vh;
+  overflow: hidden;
   background: radial-gradient(circle at 50% 40%, #0b1a24 0%, #050a0e 70%);
 }
 
 #game {
-  width: 100%;
-  height: 100%;
+  /* The engine writes a pixel width/height inline from the window size it saw
+     at boot. Let the canvas keep its 16:9 ratio but never overflow the shell,
+     otherwise the top HUD row gets clipped. */
+  width: auto !important;
+  height: auto !important;
+  max-width: 100%;
+  max-height: 100%;
   display: block;
   image-rendering: pixelated;
 }
@@ -41,4 +47,27 @@ body {
 
 #loading.hidden {
   display: none;
+}
+
+#volume {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  padding: 5px 10px;
+  border: 1px solid #1d3a4a;
+  border-radius: 4px;
+  background: rgba(5, 10, 14, 0.85);
+  color: #8fe3b0;
+  font-family: monospace;
+  font-size: 13px;
+  letter-spacing: 0.15em;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+  z-index: 5;
+}
+
+#volume.visible {
+  opacity: 1;
 }

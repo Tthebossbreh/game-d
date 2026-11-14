@@ -5,9 +5,6 @@ import { moveAndCollide } from '../physics/kinematic';
 export interface PlayerInput {
   left: boolean;
   right: boolean;
-  up: boolean;
-  down: boolean;
-  jumpHeld: boolean;
   jumpPressed: boolean;
   boostPressed: boolean;
 }
@@ -25,9 +22,8 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /**
- * Engine-free player simulation. The diver is a standard gravity platformer
- * with one underwater twist: holding jump keeps adding lift, so the open cave
- * is traversable in any direction.
+ * Engine-free player simulation: a low-gravity platformer. Jumping is the only
+ * way up — there is no swimming lift once the diver leaves the ground.
  */
 export class PlayerState {
   x: number;
@@ -135,13 +131,6 @@ export class PlayerState {
       events.jump = true;
     }
 
-    if ((input.jumpHeld || input.up) && this.vy > -PLAYER.swimMaxRise) {
-      this.vy = Math.max(-PLAYER.swimMaxRise, this.vy - PLAYER.swimUpAccel * dt);
-    }
-    if (input.down && this.vy < PLAYER.maxFall) {
-      this.vy += PLAYER.swimUpAccel * 0.6 * dt;
-    }
-
     this.vy += PLAYER.gravity * dt;
     if (this.vy > PLAYER.maxFall) {
       this.vy = PLAYER.maxFall;
@@ -176,14 +165,21 @@ export class PlayerState {
     return true;
   }
 
-  respawn(centerX: number, centerY: number): void {
+  /**
+   * Place the diver back at a spawn point. Vigor is restored by default (a
+   * death or GAME OVER); looping through the exit passes `false` so the run
+   * keeps whatever vigor it has left.
+   */
+  respawn(centerX: number, centerY: number, restoreVigor = true): void {
     this.x = centerX - this.w / 2;
     this.y = centerY - this.h / 2;
     this.vx = 0;
     this.vy = 0;
     this.facing = 1;
     this.onGround = false;
-    this.health = PLAYER.maxHealth;
+    if (restoreVigor) {
+      this.health = PLAYER.maxHealth;
+    }
     this.invuln = PLAYER.invulnTime;
     this.hurtTimer = 0;
     this.boostTimer = 0;

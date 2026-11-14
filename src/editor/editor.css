@@ -125,6 +125,36 @@ button.primary {
   background: #061019;
 }
 
+#stamp-wrap {
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #061019;
+  margin-bottom: 6px;
+}
+
+#stamp-wrap:empty,
+#stamp-preview[width='0'] {
+  display: none;
+}
+
+#stamp-wrap.empty {
+  display: none;
+}
+
+#stamp-preview {
+  display: block;
+  image-rendering: pixelated;
+}
+
+.hint-line {
+  margin: 0 0 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
 #palette {
   display: block;
   image-rendering: pixelated;

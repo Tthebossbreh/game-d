@@ -1,13 +1,4 @@
-import {
-  Actor,
-  Color,
-  ImageWrapping,
-  Keys,
-  Scene,
-  TiledSprite,
-  vec,
-  type Engine,
-} from 'excalibur';
+import { Actor, Color, ImageWrapping, Scene, TiledSprite, vec, type Engine } from 'excalibur';
 import { FX_FRAME, img } from '../assets';
 import { Sfx } from '../audio/Sfx';
 import { CAMERA, PLAYER, VIEW } from '../config';
@@ -21,6 +12,7 @@ import { overlaps } from '../physics/aabb';
 import { PlayerActor } from '../player/PlayerActor';
 import { PlayerState } from '../player/PlayerState';
 import { renderTileLayer } from '../render/tilemap';
+import { formatMultiplier, timeMultiplier, timeScore } from '../scoring';
 import { Hud } from '../ui/Hud';
 
 type FxName = keyof typeof FX_FRAME;
@@ -31,6 +23,15 @@ function clamp(value: number, min: number, max: number): number {
 
 function damp(current: number, target: number, lambda: number, dt: number): number {
   return target + (current - target) * Math.exp(-lambda * dt);
+}
+
+/** Timer label: `12.4` under a minute, `1:02.4` above. Always the same width. */
+function formatTime(seconds: number): string {
+  if (seconds >= 60) {
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}:${(seconds - minutes * 60).toFixed(1).padStart(4, '0')}`;
+  }
+  return seconds.toFixed(1).padStart(4, '0');
 }
 
 const EXPLOSION_BY_MINE: Record<string, FxName> = {
@@ -53,7 +54,16 @@ export class GameScene extends Scene {
   private readonly goal = { x: VIEW.width / 2, y: VIEW.height / 2 };
   private score = 0;
   private time = 0;
-  private complete = false;
+  /** Level timer: starts on the first movement input, freezes at the exit. */
+  private lapTime = 0;
+  private lapRunning = false;
+  private lapStarted = false;
+  /** Counts down after the exit so the HUD can show a short "back to start" note. */
+  private loopNotice = 0;
+  /** Counts down after vigor runs out so the HUD can show GAME OVER. */
+  private gameOverNotice = 0;
+  /** Only the first trip to the exit earns the completion bonus. */
+  private reachedExit = false;
 
   onInitialize(engine: Engine): void {
     this.controls = new InputMap(engine);
@@ -61,8 +71,8 @@ export class GameScene extends Scene {
     this.background = this.addParallax(img.env.background, -100);
     this.midground = this.addParallax(img.env.midground, -50);
 
-    this.addLayer(renderTileLayer(LEVEL.layers.main, LEVEL.columns.main, LEVEL.tile, img.env.tiles, LEVEL.pixelWidth, LEVEL.pixelHeight), 0);
-    this.addLayer(renderTileLayer(LEVEL.layers.front, LEVEL.columns.front, LEVEL.tile, img.env.props, LEVEL.pixelWidth, LEVEL.pixelHeight), 8);
+    this.addLayer(renderTileLayer(LEVEL.layers.main, LEVEL.columns.main, LEVEL.tile, img.env.tiles, LEVEL.pixelWidth, LEVEL.pixelHeight, LEVEL.flipX), 0);
+    this.addLayer(renderTileLayer(LEVEL.layers.front, LEVEL.columns.front, LEVEL.tile, img.env.props, LEVEL.pixelWidth, LEVEL.pixelHeight, LEVEL.flipX), 8);
 
     this.spawnEntities();
 
@@ -101,17 +111,21 @@ export class GameScene extends Scene {
       return;
     }
     this.time += dt;
-
-    if (this.complete) {
-      this.hud.setHint('LEVEL COMPLETE - PRESS ENTER', '#f2d06b');
-      if (this.engine.input.keyboard.wasPressed(Keys.Enter)) {
-        void this.engine.goToScene('title');
-      }
-      this.syncActors();
-      return;
-    }
+    this.loopNotice = Math.max(0, this.loopNotice - dt);
+    this.gameOverNotice = Math.max(0, this.gameOverNotice - dt);
 
     const input = this.controls.sample();
+    // Start timing on the first movement input; a beat after the exit lets the
+    // final lap time stay readable before the next lap begins.
+    const moving = input.left || input.right || input.jumpPressed || input.boostPressed;
+    if (!this.lapStarted && moving && this.loopNotice <= 0 && this.gameOverNotice <= 0) {
+      this.lapStarted = true;
+      this.lapRunning = true;
+      this.lapTime = 0;
+    }
+    if (this.lapRunning) {
+      this.lapTime += dt;
+    }
     const events = this.player.step(input, dt, this.solids);
     if (events.jump) {
       Sfx.jump();
@@ -125,7 +139,7 @@ export class GameScene extends Scene {
       Sfx.land();
     }
     if (events.died) {
-      this.respawn();
+      this.endRun();
     }
 
     const target = { x: this.player.centerX, y: this.player.centerY };
@@ -221,7 +235,8 @@ export class GameScene extends Scene {
         state.kill();
         Sfx.enemyDeath();
         this.spawnFx('enemy-death', state.centerX, state.centerY, 28);
-        this.score += state.kind === 'fish-big' ? 30 : state.kind === 'fish-dart' ? 20 : 10;
+        const base = state.kind === 'fish-big' ? 30 : state.kind === 'fish-dart' ? 20 : 10;
+        this.score += timeScore(base, this.lapTime);
         if (stomping) {
           this.player.vy = -PLAYER.jumpSpeed * 0.7;
         }
@@ -242,22 +257,44 @@ export class GameScene extends Scene {
       if (overlaps(playerBox, box)) {
         pickup.taken = true;
         pickup.actor.kill();
-        this.score += 5;
+        this.score += timeScore(5, this.lapTime);
         Sfx.pickup();
       }
     }
   }
 
   private checkGoal(): void {
-    if (this.complete || this.player.dead) {
+    if (this.player.dead) {
       return;
     }
     const dx = this.player.centerX - this.goal.x;
     const dy = this.player.centerY - this.goal.y;
     if (dx * dx + dy * dy < 30 * 30) {
-      this.complete = true;
-      this.score += 100;
-      Sfx.pickup();
+      this.reachExit();
+    }
+  }
+
+  /** Reaching the right exit loops the run: the diver restarts at the level start. */
+  private reachExit(): void {
+    // The lap ends here; the frozen time stays on the HUD until the next move.
+    this.lapRunning = false;
+    this.lapStarted = false;
+    if (!this.reachedExit) {
+      this.reachedExit = true;
+      this.score += timeScore(100, this.lapTime);
+    }
+    Sfx.pickup();
+    this.spawnFx('bubbles', this.player.centerX, this.player.centerY, 22);
+    this.resetEnemies();
+    // Loop back to the start without healing or touching the score.
+    this.respawn(false);
+    this.loopNotice = 1.5;
+  }
+
+  /** Every lap — and every new run after GAME OVER — starts with the full cave. */
+  private resetEnemies(): void {
+    for (const { state } of this.enemies) {
+      state.revive();
     }
   }
 
@@ -270,8 +307,19 @@ export class GameScene extends Scene {
     this.add(new FxActor(img.fx[name], FX_FRAME[name], x, y, z));
   }
 
-  private respawn(): void {
-    this.player.respawn(PLAYER_SPAWN.x, PLAYER_SPAWN.y);
+  /** Vigor ran out: wipe the score, flash GAME OVER and restart the diver. */
+  private endRun(): void {
+    this.score = 0;
+    this.lapTime = 0;
+    this.lapStarted = false;
+    this.lapRunning = false;
+    this.gameOverNotice = 2.5;
+    this.resetEnemies();
+    this.respawn();
+  }
+
+  private respawn(restoreVigor = true): void {
+    this.player.respawn(PLAYER_SPAWN.x, PLAYER_SPAWN.y, restoreVigor);
     this.controls.reset();
     for (const { state } of this.enemies) {
       if (state.dead) {
@@ -280,6 +328,19 @@ export class GameScene extends Scene {
       state.x = state.homeX;
       state.y = state.homeY;
     }
+    this.snapCamera();
+  }
+
+  /** Jump the camera straight to the player after a respawn instead of panning across the cave. */
+  private snapCamera(): void {
+    this.camera.pos = vec(
+      clamp(this.player.centerX, VIEW.width / 2, LEVEL.pixelWidth - VIEW.width / 2),
+      clamp(this.player.centerY, VIEW.height / 2, LEVEL.pixelHeight - VIEW.height / 2),
+    );
+    const left = this.camera.pos.x - VIEW.width / 2;
+    const top = this.camera.pos.y - VIEW.height / 2;
+    this.background.pos = vec(left * 0.25, top * 0.25);
+    this.midground.pos = vec(left * 0.5, top * 0.5);
   }
 
   private syncActors(): void {
@@ -315,6 +376,24 @@ export class GameScene extends Scene {
   private updateHud(): void {
     const vigor = '#'.repeat(Math.max(0, this.player.health)) + '-'.repeat(Math.max(0, PLAYER.maxHealth - this.player.health));
     this.hud.setStatus(`SCORE ${this.score.toString().padStart(4, '0')}  VIGOR [${vigor}]`);
-    this.hud.setHint('REACH THE RIGHT EXIT', '#8fe3b0');
+    const multiplier = formatMultiplier(timeMultiplier(this.lapTime));
+    if (this.lapRunning) {
+      this.hud.setTimer(`TIME ${formatTime(this.lapTime)}  ${multiplier}`, '#ffffff');
+    } else if (this.lapTime > 0) {
+      this.hud.setTimer(`TIME ${formatTime(this.lapTime)}  ${multiplier}`, '#f2d06b');
+    } else {
+      this.hud.setTimer(`TIME --.-  ${multiplier}`, '#6f8f9f');
+    }
+    if (this.gameOverNotice > 0) {
+      this.hud.setMessage('GAME OVER', '#ff6b6b');
+      this.hud.setHint('SCORE RESET - TRY AGAIN', '#ff6b6b');
+    } else {
+      this.hud.setMessage('');
+      if (this.loopNotice > 0) {
+        this.hud.setHint('EXIT REACHED - BACK TO THE START', '#f2d06b');
+      } else {
+        this.hud.setHint('REACH THE RIGHT EXIT', '#8fe3b0');
+      }
+    }
   }
 }

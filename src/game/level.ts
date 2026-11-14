@@ -26,6 +26,8 @@ export interface LevelData {
   solids: Rect[];
   spawns: Spawn[];
   layers: { main: number[][]; front: number[][] };
+  /** Per-cell horizontal flip mask for the tile layers (1 = mirror the tile). */
+  flipX: number[][];
   columns: { main: number; front: number };
 }
 
@@ -116,6 +118,7 @@ export function parseLevel(raw: typeof import('./levels/level1.json')): LevelDat
     solids: buildSolids(collision, width, height, raw.tilesize),
     spawns,
     layers: { main: raw.main as number[][], front: raw.front as number[][] },
+    flipX: (raw.flipX ?? []) as number[][],
     columns: { main: raw.tilesets.main.cols, front: raw.tilesets.front.cols },
   };
 }

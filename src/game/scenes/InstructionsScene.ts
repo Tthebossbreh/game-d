@@ -20,6 +20,12 @@ export class InstructionsScene extends Scene {
       ImageSource.fromHtmlCanvasElement(this.font.toCanvas('PRESS ENTER TO START', 1.6, '#ffffff')).toSprite(),
     );
     this.add(prompt);
+
+    const volumeHint = new Actor({ x: 10, y: 8, anchor: vec(0, 0), z: 10 });
+    volumeHint.graphics.use(
+      ImageSource.fromHtmlCanvasElement(this.font.toCanvas('M MUTE   - / + VOLUME', 1.3, '#8fe3b0')).toSprite(),
+    );
+    this.add(volumeHint);
   }
 
   onPreUpdate(engine: Engine): void {
