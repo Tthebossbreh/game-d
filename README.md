@@ -19,7 +19,8 @@ over 60 seconds. Finish fast to bank more points; both values live in `SCORE`
 in `src/game/config.ts`.
 
 Run out of vigor and the run ends: the score resets to zero, a **GAME OVER**
-banner flashes, and the diver restarts at the beginning of the cave.
+banner flashes, every fish and mine returns to its spawn, and the diver restarts
+at the beginning of the cave with full vigor.
 
 ## Run it
 

@@ -291,7 +291,7 @@ export class GameScene extends Scene {
     this.loopNotice = 1.5;
   }
 
-  /** Every lap starts with the full cave: restock the fish and mines. */
+  /** Every lap — and every new run after GAME OVER — starts with the full cave. */
   private resetEnemies(): void {
     for (const { state } of this.enemies) {
       state.revive();
@@ -314,6 +314,7 @@ export class GameScene extends Scene {
     this.lapStarted = false;
     this.lapRunning = false;
     this.gameOverNotice = 2.5;
+    this.resetEnemies();
     this.respawn();
   }
 
