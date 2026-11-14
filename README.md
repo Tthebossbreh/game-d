@@ -12,6 +12,14 @@ respawn back at the level start with your score intact.
 
 ![Gameplay](docs/screenshot.png)
 
+Score scales with speed: every fish, pickup and exit award is multiplied by a
+time bonus that starts at **3x** when the lap timer starts and tapers to **1x**
+over 60 seconds. Finish fast to bank more points; both values live in `SCORE`
+in `src/game/config.ts`.
+
+Run out of vigor and the run ends: the score resets to zero, a **GAME OVER**
+banner flashes, and the diver restarts at the beginning of the cave.
+
 ## Run it
 
 ```
@@ -71,6 +79,7 @@ editor (including the player start) takes effect on the next page load.
 | Jump | `Space`, `↑` or `W` |
 | Boost (also your attack) | `Shift`, `X` or `Z` |
 | Confirm | `Enter` |
+| Mute / volume | `M`, `-` / `+` |
 
 Jumps use low gravity for a tall, floaty arc that clears the cave's ledges.
 Boosting into a fish destroys it; so does landing on one.

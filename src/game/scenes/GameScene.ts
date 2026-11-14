@@ -12,6 +12,7 @@ import { overlaps } from '../physics/aabb';
 import { PlayerActor } from '../player/PlayerActor';
 import { PlayerState } from '../player/PlayerState';
 import { renderTileLayer } from '../render/tilemap';
+import { formatMultiplier, timeMultiplier, timeScore } from '../scoring';
 import { Hud } from '../ui/Hud';
 
 type FxName = keyof typeof FX_FRAME;
@@ -59,6 +60,8 @@ export class GameScene extends Scene {
   private lapStarted = false;
   /** Counts down after the exit so the HUD can show a short "back to start" note. */
   private loopNotice = 0;
+  /** Counts down after vigor runs out so the HUD can show GAME OVER. */
+  private gameOverNotice = 0;
   /** Only the first trip to the exit earns the completion bonus. */
   private reachedExit = false;
 
@@ -68,8 +71,8 @@ export class GameScene extends Scene {
     this.background = this.addParallax(img.env.background, -100);
     this.midground = this.addParallax(img.env.midground, -50);
 
-    this.addLayer(renderTileLayer(LEVEL.layers.main, LEVEL.columns.main, LEVEL.tile, img.env.tiles, LEVEL.pixelWidth, LEVEL.pixelHeight), 0);
-    this.addLayer(renderTileLayer(LEVEL.layers.front, LEVEL.columns.front, LEVEL.tile, img.env.props, LEVEL.pixelWidth, LEVEL.pixelHeight), 8);
+    this.addLayer(renderTileLayer(LEVEL.layers.main, LEVEL.columns.main, LEVEL.tile, img.env.tiles, LEVEL.pixelWidth, LEVEL.pixelHeight, LEVEL.flipX), 0);
+    this.addLayer(renderTileLayer(LEVEL.layers.front, LEVEL.columns.front, LEVEL.tile, img.env.props, LEVEL.pixelWidth, LEVEL.pixelHeight, LEVEL.flipX), 8);
 
     this.spawnEntities();
 
@@ -109,12 +112,13 @@ export class GameScene extends Scene {
     }
     this.time += dt;
     this.loopNotice = Math.max(0, this.loopNotice - dt);
+    this.gameOverNotice = Math.max(0, this.gameOverNotice - dt);
 
     const input = this.controls.sample();
     // Start timing on the first movement input; a beat after the exit lets the
     // final lap time stay readable before the next lap begins.
     const moving = input.left || input.right || input.jumpPressed || input.boostPressed;
-    if (!this.lapStarted && moving && this.loopNotice <= 0) {
+    if (!this.lapStarted && moving && this.loopNotice <= 0 && this.gameOverNotice <= 0) {
       this.lapStarted = true;
       this.lapRunning = true;
       this.lapTime = 0;
@@ -135,7 +139,7 @@ export class GameScene extends Scene {
       Sfx.land();
     }
     if (events.died) {
-      this.respawn();
+      this.endRun();
     }
 
     const target = { x: this.player.centerX, y: this.player.centerY };
@@ -231,7 +235,8 @@ export class GameScene extends Scene {
         state.kill();
         Sfx.enemyDeath();
         this.spawnFx('enemy-death', state.centerX, state.centerY, 28);
-        this.score += state.kind === 'fish-big' ? 30 : state.kind === 'fish-dart' ? 20 : 10;
+        const base = state.kind === 'fish-big' ? 30 : state.kind === 'fish-dart' ? 20 : 10;
+        this.score += timeScore(base, this.lapTime);
         if (stomping) {
           this.player.vy = -PLAYER.jumpSpeed * 0.7;
         }
@@ -252,7 +257,7 @@ export class GameScene extends Scene {
       if (overlaps(playerBox, box)) {
         pickup.taken = true;
         pickup.actor.kill();
-        this.score += 5;
+        this.score += timeScore(5, this.lapTime);
         Sfx.pickup();
       }
     }
@@ -276,7 +281,7 @@ export class GameScene extends Scene {
     this.lapStarted = false;
     if (!this.reachedExit) {
       this.reachedExit = true;
-      this.score += 100;
+      this.score += timeScore(100, this.lapTime);
     }
     Sfx.pickup();
     this.spawnFx('bubbles', this.player.centerX, this.player.centerY, 22);
@@ -291,6 +296,16 @@ export class GameScene extends Scene {
 
   private spawnFx(name: FxName, x: number, y: number, z = 30): void {
     this.add(new FxActor(img.fx[name], FX_FRAME[name], x, y, z));
+  }
+
+  /** Vigor ran out: wipe the score, flash GAME OVER and restart the diver. */
+  private endRun(): void {
+    this.score = 0;
+    this.lapTime = 0;
+    this.lapStarted = false;
+    this.lapRunning = false;
+    this.gameOverNotice = 2.5;
+    this.respawn();
   }
 
   private respawn(): void {
@@ -351,17 +366,24 @@ export class GameScene extends Scene {
   private updateHud(): void {
     const vigor = '#'.repeat(Math.max(0, this.player.health)) + '-'.repeat(Math.max(0, PLAYER.maxHealth - this.player.health));
     this.hud.setStatus(`SCORE ${this.score.toString().padStart(4, '0')}  VIGOR [${vigor}]`);
+    const multiplier = formatMultiplier(timeMultiplier(this.lapTime));
     if (this.lapRunning) {
-      this.hud.setTimer(`TIME ${formatTime(this.lapTime)}`, '#ffffff');
+      this.hud.setTimer(`TIME ${formatTime(this.lapTime)}  ${multiplier}`, '#ffffff');
     } else if (this.lapTime > 0) {
-      this.hud.setTimer(`TIME ${formatTime(this.lapTime)}`, '#f2d06b');
+      this.hud.setTimer(`TIME ${formatTime(this.lapTime)}  ${multiplier}`, '#f2d06b');
     } else {
-      this.hud.setTimer('TIME --.-', '#6f8f9f');
+      this.hud.setTimer(`TIME --.-  ${multiplier}`, '#6f8f9f');
     }
-    if (this.loopNotice > 0) {
-      this.hud.setHint('EXIT REACHED - BACK TO THE START', '#f2d06b');
+    if (this.gameOverNotice > 0) {
+      this.hud.setMessage('GAME OVER', '#ff6b6b');
+      this.hud.setHint('SCORE RESET - TRY AGAIN', '#ff6b6b');
     } else {
-      this.hud.setHint('REACH THE RIGHT EXIT', '#8fe3b0');
+      this.hud.setMessage('');
+      if (this.loopNotice > 0) {
+        this.hud.setHint('EXIT REACHED - BACK TO THE START', '#f2d06b');
+      } else {
+        this.hud.setHint('REACH THE RIGHT EXIT', '#8fe3b0');
+      }
     }
   }
 }

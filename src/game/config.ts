@@ -49,6 +49,13 @@ export const PLAYER = {
   deathTime: 0.9,
 } as const;
 
+export const SCORE = {
+  /** Multiplier in force the instant a lap timer starts. */
+  peakMultiplier: 3,
+  /** Lap time (seconds) at which the multiplier has fallen to 1x. */
+  parSeconds: 60,
+} as const;
+
 export const ENEMY = {
   fish: { width: 32, height: 32, speed: 42, aggro: 120 },
   'fish-big': { width: 54, height: 49, speed: 22, turnTime: 5 },

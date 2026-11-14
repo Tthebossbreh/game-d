@@ -27,11 +27,17 @@ describe('buildSolids', () => {
 
 describe('level 1', () => {
   it('loads the cave dimensions from the level JSON', () => {
-    expect(LEVEL.width).toBe(130);
+    expect(LEVEL.width).toBe(65);
     expect(LEVEL.height).toBe(50);
     expect(LEVEL.tile).toBe(16);
-    expect(LEVEL.pixelWidth).toBe(130 * 16);
+    expect(LEVEL.pixelWidth).toBe(65 * 16);
     expect(LEVEL.pixelHeight).toBe(50 * 16);
+  });
+
+  it('carries the horizontal flip mask for the mirrored right wall', () => {
+    expect(LEVEL.flipX.length).toBe(LEVEL.height);
+    expect(LEVEL.flipX[10]?.[59]).toBe(0);
+    expect(LEVEL.flipX[10]?.[64]).toBe(1);
   });
 
   it('collapses the bitmap into far fewer rectangles', () => {

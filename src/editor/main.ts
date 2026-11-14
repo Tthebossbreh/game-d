@@ -35,6 +35,7 @@ interface LevelJSON {
   collision: number[][];
   main: number[][];
   front: number[][];
+  flipX?: number[][];
   entities: EntityJSON[];
 }
 
@@ -268,6 +269,7 @@ function drawLayer(
   sy0: number,
   sx1: number,
   sy1: number,
+  flipX?: number[][],
 ): void {
   if (!image.complete || image.naturalWidth === 0) {
     return;
@@ -287,17 +289,17 @@ function drawLayer(
       const index = id - 1;
       const srcX = (index % cols) * T;
       const srcY = Math.floor(index / cols) * T;
-      ctx.drawImage(
-        image,
-        srcX,
-        srcY,
-        T,
-        T,
-        (x * T - state.panX) * z,
-        (y * T - state.panY) * z,
-        T * z,
-        T * z,
-      );
+      const dx = (x * T - state.panX) * z;
+      const dy = (y * T - state.panY) * z;
+      if (flipX?.[y]?.[x]) {
+        ctx.save();
+        ctx.translate(dx + T * z, dy);
+        ctx.scale(-1, 1);
+        ctx.drawImage(image, srcX, srcY, T, T, 0, 0, T * z, T * z);
+        ctx.restore();
+      } else {
+        ctx.drawImage(image, srcX, srcY, T, T, dx, dy, T * z, T * z);
+      }
     }
   }
 }
@@ -538,8 +540,8 @@ function render(): void {
   const sx1 = Math.min(state.level.width, Math.ceil((state.panX + viewW / z) / T));
   const sy1 = Math.min(state.level.height, Math.ceil((state.panY + viewH / z) / T));
 
-  drawLayer(state.level.main, state.level.tilesets.main.cols, tilesImg, sx0, sy0, sx1, sy1);
-  drawLayer(state.level.front, state.level.tilesets.front.cols, propsImg, sx0, sy0, sx1, sy1);
+  drawLayer(state.level.main, state.level.tilesets.main.cols, tilesImg, sx0, sy0, sx1, sy1, state.level.flipX);
+  drawLayer(state.level.front, state.level.tilesets.front.cols, propsImg, sx0, sy0, sx1, sy1, state.level.flipX);
   if (state.layer === 'collision') {
     drawCollision(sx0, sy0, sx1, sy1);
   }

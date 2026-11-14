@@ -1,5 +1,6 @@
 import { Color, DisplayMode, Engine } from 'excalibur';
 import { createLoader } from './game/assets';
+import { Sfx } from './game/audio/Sfx';
 import { FIXED_UPDATE_FPS, VIEW } from './game/config';
 import { GameScene } from './game/scenes/GameScene';
 import { InstructionsScene } from './game/scenes/InstructionsScene';
@@ -35,6 +36,39 @@ window.addEventListener(
   },
   { passive: false },
 );
+
+// Volume toast: a small DOM overlay so the control works on every scene.
+const volumeToast = document.createElement('div');
+volumeToast.id = 'volume';
+volumeToast.setAttribute('role', 'status');
+document.getElementById('shell')?.appendChild(volumeToast);
+
+let volumeToastTimer = 0;
+function showVolume(): void {
+  volumeToast.textContent = `VOLUME ${Sfx.label}`;
+  volumeToast.classList.add('visible');
+  window.clearTimeout(volumeToastTimer);
+  volumeToastTimer = window.setTimeout(() => volumeToast.classList.remove('visible'), 1400);
+}
+
+window.addEventListener('keydown', (event) => {
+  if (event.code === 'KeyM') {
+    if (!event.repeat) {
+      Sfx.toggleMute();
+      showVolume();
+    }
+    return;
+  }
+  if (event.code === 'Minus' || event.code === 'NumpadSubtract') {
+    Sfx.nudgeVolume(-1);
+    showVolume();
+    return;
+  }
+  if (event.code === 'Equal' || event.code === 'NumpadAdd') {
+    Sfx.nudgeVolume(1);
+    showVolume();
+  }
+});
 
 game
   .start(createLoader())

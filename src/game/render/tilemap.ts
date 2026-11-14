@@ -12,6 +12,7 @@ export function renderTileLayer(
   tileset: ImageSource,
   widthPx: number,
   heightPx: number,
+  flipX?: number[][],
 ): ImageSource {
   const canvas = document.createElement('canvas');
   canvas.width = widthPx;
@@ -33,7 +34,16 @@ export function renderTileLayer(
         const index = id - 1;
         const sx = (index % columns) * tileSize;
         const sy = Math.floor(index / columns) * tileSize;
-        ctx.drawImage(image, sx, sy, tileSize, tileSize, x * tileSize, y * tileSize, tileSize, tileSize);
+        if (flipX?.[y]?.[x]) {
+          // Mirrored copy (e.g. the right-hand wall built from the left wall).
+          ctx.save();
+          ctx.translate((x + 1) * tileSize, y * tileSize);
+          ctx.scale(-1, 1);
+          ctx.drawImage(image, sx, sy, tileSize, tileSize, 0, 0, tileSize, tileSize);
+          ctx.restore();
+        } else {
+          ctx.drawImage(image, sx, sy, tileSize, tileSize, x * tileSize, y * tileSize, tileSize, tileSize);
+        }
       }
     }
   }
