@@ -107,8 +107,9 @@ bitmap and the `tiles`/`props` tile layers are extracted from the Impact.js
 level data into `src/game/levels/level1.json` and rasterised at load time.
 
 > Artwork by **Luis Zuno (@ansimuz)** — public domain, free for personal and
-> commercial use. Demo music by **Pascal Belisle**. Fonts by **Bego Somepx**.
-> More free assets at <http://www.pixelgameart.org>.
+> commercial use. Demo music by **Pascal Belisle**. Bitmap font `04b03` by
+> **04 / Yuji Oshimoto**. More free assets at <http://www.pixelgameart.org>.
+> Full attribution for every asset lives in [CREDITS.md](CREDITS.md).
 
 ## Layout
 
