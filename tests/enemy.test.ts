@@ -41,4 +41,41 @@ describe('EnemyState', () => {
     expect(mine.vy).toBe(0);
     expect(mine.isMine).toBe(true);
   });
+
+  it('revives a killed fish back at its spawn', () => {
+    const fish = new EnemyState('fish', 100, 100);
+    fish.x = 40;
+    fish.y = 60;
+    fish.vx = 12;
+    fish.kill();
+
+    fish.revive();
+
+    expect(fish.dead).toBe(false);
+    expect(fish.centerX).toBeCloseTo(100);
+    expect(fish.centerY).toBeCloseTo(100);
+    expect(fish.vx).toBe(0);
+    expect(fish.vy).toBe(0);
+    expect(fish.facing).toBe(1);
+  });
+
+  it('re-arms a charging dart fish and restores mines', () => {
+    const dart = new EnemyState('fish-dart', 100, 100);
+    dart.step(DT, { x: 160, y: 100 }, NO_SOLIDS);
+    expect(dart.charging).toBe(true);
+
+    dart.revive();
+
+    expect(dart.dead).toBe(false);
+    expect(dart.charging).toBe(false);
+    expect(dart.facing).toBe(1);
+
+    const mine = new EnemyState('mine-small', 300, 200);
+    mine.kill();
+    mine.x = 10;
+    mine.revive();
+    expect(mine.dead).toBe(false);
+    expect(mine.centerX).toBeCloseTo(300);
+    expect(mine.centerY).toBeCloseTo(200);
+  });
 });

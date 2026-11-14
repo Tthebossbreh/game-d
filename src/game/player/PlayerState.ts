@@ -165,14 +165,21 @@ export class PlayerState {
     return true;
   }
 
-  respawn(centerX: number, centerY: number): void {
+  /**
+   * Place the diver back at a spawn point. Vigor is restored by default (a
+   * death or GAME OVER); looping through the exit passes `false` so the run
+   * keeps whatever vigor it has left.
+   */
+  respawn(centerX: number, centerY: number, restoreVigor = true): void {
     this.x = centerX - this.w / 2;
     this.y = centerY - this.h / 2;
     this.vx = 0;
     this.vy = 0;
     this.facing = 1;
     this.onGround = false;
-    this.health = PLAYER.maxHealth;
+    if (restoreVigor) {
+      this.health = PLAYER.maxHealth;
+    }
     this.invuln = PLAYER.invulnTime;
     this.hurtTimer = 0;
     this.boostTimer = 0;

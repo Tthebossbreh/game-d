@@ -285,8 +285,17 @@ export class GameScene extends Scene {
     }
     Sfx.pickup();
     this.spawnFx('bubbles', this.player.centerX, this.player.centerY, 22);
-    this.respawn();
+    this.resetEnemies();
+    // Loop back to the start without healing or touching the score.
+    this.respawn(false);
     this.loopNotice = 1.5;
+  }
+
+  /** Every lap starts with the full cave: restock the fish and mines. */
+  private resetEnemies(): void {
+    for (const { state } of this.enemies) {
+      state.revive();
+    }
   }
 
   private explode(state: EnemyState): void {
@@ -308,8 +317,8 @@ export class GameScene extends Scene {
     this.respawn();
   }
 
-  private respawn(): void {
-    this.player.respawn(PLAYER_SPAWN.x, PLAYER_SPAWN.y);
+  private respawn(restoreVigor = true): void {
+    this.player.respawn(PLAYER_SPAWN.x, PLAYER_SPAWN.y, restoreVigor);
     this.controls.reset();
     for (const { state } of this.enemies) {
       if (state.dead) {

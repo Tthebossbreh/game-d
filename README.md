@@ -7,8 +7,9 @@ asset pack, on an **Excalibur.js 0.32 + TypeScript + Vite + pnpm** stack.
 
 You play a diver descending a flooded cave: run, jump and boost through the
 rock, stomp or dash through fish, avoid mines, collect drifting bubbles and
-reach the glowing exit on the far right. Touching the exit loops the run: you
-respawn back at the level start with your score intact.
+reach the glowing exit on the far right. Touching the exit loops the run: the
+fish and mines return to their starting spots, while you respawn at the level
+start with your score and remaining vigor intact.
 
 ![Gameplay](docs/screenshot.png)
 

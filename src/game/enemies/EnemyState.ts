@@ -26,6 +26,7 @@ export class EnemyState {
   /** True once a dart fish has locked on and is charging. */
   charging = false;
   private turnTimer: number;
+  private readonly initialTurnTime: number;
 
   constructor(kind: EnemyKind, centerX: number, centerY: number) {
     const def = ENEMY[kind];
@@ -36,7 +37,8 @@ export class EnemyState {
     this.y = centerY - this.height / 2;
     this.homeX = this.x;
     this.homeY = this.y;
-    this.turnTimer = 'turnTime' in def ? def.turnTime : 0;
+    this.initialTurnTime = 'turnTime' in def ? def.turnTime : 0;
+    this.turnTimer = this.initialTurnTime;
   }
 
   get centerX(): number {
@@ -146,5 +148,20 @@ export class EnemyState {
 
   kill(): void {
     this.dead = true;
+  }
+
+  /**
+   * Return the enemy to its spawn, alive and un-alerted. Used when the level
+   * loops so every lap starts with the same fish and mines.
+   */
+  revive(): void {
+    this.dead = false;
+    this.x = this.homeX;
+    this.y = this.homeY;
+    this.vx = 0;
+    this.vy = 0;
+    this.facing = 1;
+    this.charging = false;
+    this.turnTimer = this.initialTurnTime;
   }
 }

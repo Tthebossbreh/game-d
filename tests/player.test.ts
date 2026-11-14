@@ -67,6 +67,28 @@ describe('PlayerState', () => {
     expect(player.dead).toBe(true);
   });
 
+  it('can respawn without restoring vigor for a level loop', () => {
+    const player = new PlayerState(100, 100);
+    player.hurt(1, 200);
+    const vigor = player.health;
+
+    player.respawn(300, 400, false);
+
+    expect(player.centerX).toBeCloseTo(300);
+    expect(player.centerY).toBeCloseTo(400);
+    expect(player.health).toBe(vigor);
+    expect(player.dead).toBe(false);
+  });
+
+  it('restores vigor on a normal respawn', () => {
+    const player = new PlayerState(100, 100);
+    player.hurt(1, 200);
+
+    player.respawn(300, 400);
+
+    expect(player.health).toBe(PLAYER.maxHealth);
+  });
+
   it('uses a low-gravity jump arc and cannot swim upward', () => {
     const player = new PlayerState(100, 100);
     settle(player);
